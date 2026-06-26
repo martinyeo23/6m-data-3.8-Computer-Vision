@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>How a CNN Works — An Interactive Walkthrough</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,300;0,400;0,600;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ntu-navy:#1B2A4A; --ntu-dark:#1E3054; --ntu-blue:#2C5697; --ntu-blue-light:#3D6DB5;
+  --ntu-crimson:#C8102E; --ntu-crimson-dark:#A50D26;
+  --bg:#FFFFFF; --bg-off:#F4F5F7; --border:#DDE1E6; --border-light:#E8EAED;
+  --text:#1B2A4A; --text-body:#333D4D; --text-dim:#5F6B7A; --text-light:#8C95A1;
+  --c-nn:#B45309;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html{scroll-behavior:smooth;}
+body{font-family:'Open Sans',sans-serif;background:var(--bg);color:var(--text-body);line-height:1.7;font-size:16px;}
+
+/* progress bar */
+.progress-bar{position:fixed;top:0;left:0;height:4px;background:var(--ntu-crimson);width:0%;transition:width .3s ease;z-index:100;}
+
+/* hero */
+.hero{min-height:62vh;background:var(--ntu-navy);color:#fff;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;text-align:center;padding:3rem 1.5rem;border-bottom:6px solid var(--ntu-crimson);}
+.hero .label{font-size:.75rem;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:rgba(255,255,255,.7);margin-bottom:1rem;}
+.hero h1{font-weight:300;font-size:clamp(2rem,4.5vw,3.2rem);line-height:1.2;max-width:18ch;}
+.hero h1 strong{color:var(--ntu-crimson);font-weight:700;}
+.hero p{margin-top:1.2rem;color:rgba(255,255,255,.75);max-width:46ch;}
+.hero .hint{margin-top:2rem;font-size:.8rem;color:rgba(255,255,255,.5);}
+
+/* tab nav */
+.tabs{position:sticky;top:0;background:var(--ntu-navy);display:flex;flex-wrap:wrap;gap:.4rem;
+  padding:.7rem 1rem;z-index:50;border-bottom:5px solid var(--ntu-crimson);justify-content:center;}
+.tab{font-family:inherit;font-size:.78rem;font-weight:600;letter-spacing:.04em;color:rgba(255,255,255,.7);
+  background:rgba(255,255,255,.08);border:none;border-radius:999px;padding:.45rem .95rem;cursor:pointer;transition:all .2s ease;}
+.tab:hover{background:rgba(255,255,255,.18);color:#fff;}
+.tab.active{background:var(--ntu-crimson);color:#fff;}
+
+/* parts */
+.part{display:none;max-width:900px;margin:0 auto;padding:2.5rem 1.5rem 3rem;}
+.part.active{display:block;animation:fadeUp .5s ease;}
+@keyframes fadeUp{from{opacity:0;transform:translateY(14px);}to{opacity:1;transform:none;}}
+
+.part-tag{display:inline-block;font-size:.65rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--ntu-crimson);margin-bottom:.6rem;}
+.part h2{color:var(--text);font-weight:300;font-size:clamp(1.5rem,3vw,2.1rem);line-height:1.25;margin-bottom:.4rem;}
+.part h2 em{font-style:italic;color:var(--ntu-crimson);font-weight:400;}
+.part h2 strong{font-weight:700;}
+
+.scenario{border-left:4px solid var(--ntu-crimson);background:var(--bg-off);
+  padding:1rem 1.25rem;border-radius:0 4px 4px 0;margin:1.2rem 0 1.6rem;font-size:.95rem;}
+.scenario b{color:var(--text);}
+
+.stage{background:var(--bg-off);border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1.4rem 0;text-align:center;}
+.stage svg{max-width:100%;height:auto;}
+
+.controls{display:flex;gap:.6rem;flex-wrap:wrap;justify-content:center;margin-top:1rem;}
+.btn{font-family:inherit;font-size:.85rem;font-weight:600;border:none;border-radius:6px;
+  padding:.55rem 1.2rem;cursor:pointer;transition:all .2s ease;}
+.btn-primary{background:var(--ntu-crimson);color:#fff;}
+.btn-primary:hover{background:var(--ntu-crimson-dark);}
+.btn-ghost{background:#fff;color:var(--ntu-navy);border:1px solid var(--border);}
+.btn-ghost:hover{border-color:var(--ntu-blue);}
+
+.takeaway{border-left:6px solid var(--ntu-crimson);background:rgba(27,42,74,.04);
+  padding:1rem 1.3rem;border-radius:0 4px 4px 0;margin-top:1.6rem;}
+.takeaway .k{font-size:.65rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--ntu-crimson);display:block;margin-bottom:.3rem;}
+
+p.lead{margin:1rem 0;}
+.caption{font-size:.8rem;color:var(--text-dim);margin-top:.5rem;}
+.legend{display:flex;gap:1.2rem;flex-wrap:wrap;justify-content:center;margin-top:.8rem;font-size:.78rem;color:var(--text-dim);}
+.legend span{display:inline-flex;align-items:center;gap:.4rem;}
+.dot{width:12px;height:12px;border-radius:3px;display:inline-block;}
+
+.nav-foot{max-width:900px;margin:0 auto;padding:0 1.5rem 3rem;display:flex;justify-content:space-between;}
+.footer-note{text-align:center;font-size:.78rem;color:var(--text-light);padding:2rem 1.5rem;border-top:1px solid var(--border);}
+
+.bignum{font-family:'Open Sans',sans-serif;font-weight:700;}
+</style>
+</head>
+<body>
+<div class="progress-bar" id="progress"></div>
+
+<header class="hero">
+  <div class="label">(SCTP) Advanced Professional Certificate · Computer Vision</div>
+  <h1>How a <strong>CNN</strong> sees a picture</h1>
+  <p>A convolutional neural network turns raw pixels into a confident answer — "this is a cat" — through a few simple, repeatable steps. Let's watch each one.</p>
+  <div class="hint">↓ Use the tabs below. Press <b>Play</b> on each step to watch the animation.</div>
+</header>
+
+<nav class="tabs" id="tabs">
+  <button class="tab active" data-part="0">Start · The Big Idea</button>
+  <button class="tab" data-part="1">1 · The Image</button>
+  <button class="tab" data-part="2">2 · Convolution</button>
+  <button class="tab" data-part="3">3 · Pooling</button>
+  <button class="tab" data-part="4">4 · Flatten</button>
+  <button class="tab" data-part="5">5 · Decide</button>
+  <button class="tab" data-part="6">Recap</button>
+</nav>
+
+<!-- ============ PART 0 : BIG IDEA ============ -->
+<section class="part active" data-part="0">
+  <span class="part-tag">The Big Idea</span>
+  <h2>A CNN is a team of <em>pattern hunters</em>.</h2>
+  <div class="scenario">
+    <b>Think of an airport security line.</b> No single officer checks everything. One looks for edges of bags, another for shapes, another for whole objects — each passes what they find to the next. A CNN works the same way: simple detectors stack up to recognise complex things.
+  </div>
+  <p class="lead">A CNN takes an image and passes it through a pipeline. Each stage keeps the useful information and throws away the rest, until what's left is a clear decision.</p>
+
+  <div class="stage">
+    <svg viewBox="0 0 820 170" id="pipeSvg" role="img" aria-label="CNN pipeline overview">
+      <!-- boxes -->
+      <g font-family="Open Sans" text-anchor="middle">
+        <g class="pipe-node" data-i="0">
+          <rect x="10" y="55" width="110" height="60" rx="8" fill="#fff" stroke="#DDE1E6"/>
+          <text x="65" y="80" font-size="13" font-weight="700" fill="#1B2A4A">Image</text>
+          <text x="65" y="98" font-size="10" fill="#5F6B7A">pixels</text>
+        </g>
+        <g class="pipe-node" data-i="1">
+          <rect x="150" y="55" width="110" height="60" rx="8" fill="#fff" stroke="#DDE1E6"/>
+          <text x="205" y="80" font-size="13" font-weight="700" fill="#1B2A4A">Convolution</text>
+          <text x="205" y="98" font-size="10" fill="#5F6B7A">find features</text>
+        </g>
+        <g class="pipe-node" data-i="2">
+          <rect x="290" y="55" width="110" height="60" rx="8" fill="#fff" stroke="#DDE1E6"/>
+          <text x="345" y="80" font-size="13" font-weight="700" fill="#1B2A4A">Pooling</text>
+          <text x="345" y="98" font-size="10" fill="#5F6B7A">shrink</text>
+        </g>
+        <g class="pipe-node" data-i="3">
+          <rect x="430" y="55" width="110" height="60" rx="8" fill="#fff" stroke="#DDE1E6"/>
+          <text x="485" y="80" font-size="13" font-weight="700" fill="#1B2A4A">Flatten</text>
+          <text x="485" y="98" font-size="10" fill="#5F6B7A">line up</text>
+        </g>
+        <g class="pipe-node" data-i="4">
+          <rect x="570" y="55" width="110" height="60" rx="8" fill="#fff" stroke="#DDE1E6"/>
+          <text x="625" y="80" font-size="13" font-weight="700" fill="#1B2A4A">Dense</text>
+          <text x="625" y="98" font-size="10" fill="#5F6B7A">weigh up</text>
+        </g>
+        <g class="pipe-node" data-i="5">
+          <rect x="710" y="55" width="100" height="60" rx="8" fill="#fff" stroke="#C8102E"/>
+          <text x="760" y="80" font-size="13" font-weight="700" fill="#C8102E">Answer</text>
+          <text x="760" y="98" font-size="10" fill="#5F6B7A">"Cat"</text>
+        </g>
+        <!-- arrows -->
+        <g stroke="#8C95A1" stroke-width="2" fill="#8C95A1">
+          <line x1="122" y1="85" x2="146" y2="85"/><polygon points="146,80 156,85 146,90"/>
+          <line x1="262" y1="85" x2="286" y2="85"/><polygon points="286,80 296,85 286,90"/>
+          <line x1="402" y1="85" x2="426" y2="85"/><polygon points="426,80 436,85 426,90"/>
+          <line x1="542" y1="85" x2="566" y2="85"/><polygon points="566,80 576,85 566,90"/>
+          <line x1="682" y1="85" x2="706" y2="85"/><polygon points="706,80 716,85 706,90"/>
+        </g>
+      </g>
+    </svg>
+    <div class="controls"><button class="btn btn-primary" onclick="playPipe()">▶ Play the pipeline</button></div>
+    <div class="caption">Each box is one stage. Click through the tabs to open up what happens inside.</div>
+  </div>
+
+  <div class="takeaway"><span class="k">Remember this</span>
+    A CNN doesn't "look" at a picture all at once. It scans for small patterns, combines them into bigger ones, and only at the very end makes a decision.</div>
+</section>
+
+<!-- ============ PART 1 : IMAGE ============ -->
+<section class="part" data-part="1">
+  <span class="part-tag">Step 1</span>
+  <h2>To a computer, a picture is just <em>numbers</em>.</h2>
+  <div class="scenario">
+    <b>Imagine a paint-by-numbers grid.</b> Every tiny square (a <i>pixel</i>) has a brightness value — 0 is black, 255 is white. A photo is just a big grid of these numbers. The computer never sees a "cat"; it sees a spreadsheet of brightness.
+  </div>
+  <p class="lead">Hover or play to reveal the numbers hiding behind a simple image of the letter "X".</p>
+
+  <div class="stage">
+    <svg viewBox="0 0 420 260" id="imgSvg" role="img" aria-label="Image as a grid of pixel numbers"></svg>
+    <div class="controls">
+      <button class="btn btn-primary" onclick="toggleNumbers()">▶ Show the numbers</button>
+      <button class="btn btn-ghost" onclick="resetImg()">Reset</button>
+    </div>
+    <div class="legend">
+      <span><span class="dot" style="background:#1B2A4A"></span> dark pixel (high value)</span>
+      <span><span class="dot" style="background:#E8EAED"></span> light pixel (low value)</span>
+    </div>
+  </div>
+
+  <div class="takeaway"><span class="k">Remember this</span>
+    An image is a grid of numbers. Everything the CNN does next is just clever arithmetic on this grid.</div>
+</section>
+
+<!-- ============ PART 2 : CONVOLUTION ============ -->
+<section class="part" data-part="2">
+  <span class="part-tag">Step 2</span>
+  <h2>A filter slides across, <em>hunting for one pattern</em>.</h2>
+  <div class="scenario">
+    <b>Picture a stencil moving across a page.</b> A small window — the <i>filter</i> (or kernel) — slides over the image, one patch at a time. At each spot it asks: "does this patch match the pattern I'm looking for?" A high score means "yes, found it here".
+  </div>
+  <p class="lead">Watch the orange window slide. Each position produces one number in a new, smaller grid — the <b>feature map</b> — which lights up where the pattern was found.</p>
+
+  <div class="stage">
+    <svg viewBox="0 0 560 320" id="convSvg" role="img" aria-label="Convolution filter sliding over the image"></svg>
+    <div class="controls">
+      <button class="btn btn-primary" id="convBtn" onclick="playConv()">▶ Slide the filter</button>
+      <button class="btn btn-ghost" onclick="resetConv()">Reset</button>
+    </div>
+    <div class="legend">
+      <span><span class="dot" style="background:#C8102E"></span> filter window (scanning)</span>
+      <span><span class="dot" style="background:#B45309"></span> feature map (pattern strength)</span>
+    </div>
+  </div>
+
+  <div class="takeaway"><span class="k">Remember this</span>
+    One filter detects one pattern (an edge, a curve). A real CNN runs <b>many</b> filters at once, building a stack of feature maps — one per pattern.</div>
+</section>
+
+<!-- ============ PART 3 : POOLING ============ -->
+<section class="part" data-part="3">
+  <span class="part-tag">Step 3</span>
+  <h2>Pooling keeps the <em>loudest signal</em>, drops the rest.</h2>
+  <div class="scenario">
+    <b>Like summarising a paragraph in one word.</b> Pooling looks at a small block of the feature map and keeps only the strongest value (<i>max pooling</i>). The picture gets smaller and the important signals stand out — and a feature is still recognised even if it shifts a little.
+  </div>
+  <p class="lead">Each 2×2 block on the left collapses to its single biggest number on the right.</p>
+
+  <div class="stage">
+    <svg viewBox="0 0 560 280" id="poolSvg" role="img" aria-label="Max pooling reducing the feature map"></svg>
+    <div class="controls">
+      <button class="btn btn-primary" id="poolBtn" onclick="playPool()">▶ Pool the blocks</button>
+      <button class="btn btn-ghost" onclick="resetPool()">Reset</button>
+    </div>
+    <div class="legend">
+      <span><span class="dot" style="background:#C8102E"></span> block being summarised</span>
+      <span><span class="dot" style="background:#B45309"></span> winning value kept</span>
+    </div>
+  </div>
+
+  <div class="takeaway"><span class="k">Remember this</span>
+    Pooling makes the network smaller, faster, and more tolerant of small shifts — the cat is still a cat if it moves two pixels left.</div>
+</section>
+
+<!-- ============ PART 4 : FLATTEN ============ -->
+<section class="part" data-part="4">
+  <span class="part-tag">Step 4</span>
+  <h2>The grid is unrolled into <em>one long line</em>.</h2>
+  <div class="scenario">
+    <b>Like unspooling a roll of film into a single strip.</b> After convolution and pooling, we have a small grid of strong features. To feed it into the final decision-maker, we lay every value end-to-end in one row of numbers.
+  </div>
+  <p class="lead">Watch the grid cells march out into a single line of inputs.</p>
+
+  <div class="stage">
+    <svg viewBox="0 0 560 240" id="flatSvg" role="img" aria-label="Flattening the grid into a vector"></svg>
+    <div class="controls">
+      <button class="btn btn-primary" id="flatBtn" onclick="playFlat()">▶ Flatten the grid</button>
+      <button class="btn btn-ghost" onclick="resetFlat()">Reset</button>
+    </div>
+  </div>
+
+  <div class="takeaway"><span class="k">Remember this</span>
+    Flattening just reshapes the data — no information is added or removed. It turns a 2-D grid into a 1-D list ready for the final step.</div>
+</section>
+
+<!-- ============ PART 5 : DENSE / DECIDE ============ -->
+<section class="part" data-part="5">
+  <span class="part-tag">Step 5</span>
+  <h2>The network <em>weighs the evidence</em> and decides.</h2>
+  <div class="scenario">
+    <b>Like a panel of judges scoring a contestant.</b> Every feature votes, with a learned weight, toward each possible answer. The scores are turned into percentages that add up to 100%. The highest one wins.
+  </div>
+  <p class="lead">Watch the features connect to the output options, then settle into a confident prediction.</p>
+
+  <div class="stage">
+    <svg viewBox="0 0 560 300" id="denseSvg" role="img" aria-label="Dense layer producing class probabilities"></svg>
+    <div class="controls">
+      <button class="btn btn-primary" id="denseBtn" onclick="playDense()">▶ Make a prediction</button>
+      <button class="btn btn-ghost" onclick="resetDense()">Reset</button>
+    </div>
+  </div>
+
+  <div class="takeaway"><span class="k">Remember this</span>
+    The "learning" in deep learning lives in these weights. Training nudges them, over millions of examples, until the right answer reliably gets the highest score.</div>
+</section>
+
+<!-- ============ PART 6 : RECAP ============ -->
+<section class="part" data-part="6">
+  <span class="part-tag">Recap</span>
+  <h2>Five steps, <em>start to finish</em>.</h2>
+  <p class="lead">Press play to run the whole journey once more — image to answer.</p>
+  <div class="stage">
+    <svg viewBox="0 0 820 170" id="recapSvg" role="img" aria-label="CNN pipeline recap"></svg>
+    <div class="controls"><button class="btn btn-primary" onclick="playRecap()">▶ Run the whole pipeline</button></div>
+  </div>
+  <div class="scenario" style="border-left-color:var(--ntu-blue)">
+    <b>In plain words:</b> A photo is numbers → filters scan for patterns → pooling shrinks and sharpens → flatten lines it all up → the dense layer weighs every clue and picks the most likely answer. Stack these blocks deeper and the CNN learns to recognise faces, tumours, road signs — anything you give it enough examples of.
+  </div>
+  <div class="takeaway"><span class="k">One sentence to keep</span>
+    A CNN recognises images by detecting simple patterns first, combining them into complex ones, and only deciding at the very end.</div>
+</section>
+
+<div class="footer-note">NTU (SCTP) Advanced Professional Certificate · Computer Vision · Interactive teaching aid</div>
+
+<script>
+/* ---------- TAB SWITCHING ---------- */
+const tabs=[...document.querySelectorAll('.tab')];
+const parts=[...document.querySelectorAll('.part')];
+function showPart(i){
+  tabs.forEach(t=>t.classList.toggle('active',+t.dataset.part===i));
+  parts.forEach(p=>p.classList.toggle('active',+p.dataset.part===i));
+  document.getElementById('progress').style.width=((i)/(tabs.length-1)*100)+'%';
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+tabs.forEach(t=>t.addEventListener('click',()=>showPart(+t.dataset.part)));
+document.addEventListener('keydown',e=>{
+  const cur=tabs.findIndex(t=>t.classList.contains('active'));
+  if(e.key==='ArrowRight'&&cur<tabs.length-1)showPart(cur+1);
+  if(e.key==='ArrowLeft'&&cur>0)showPart(cur-1);
+});
+const SVGNS='http://www.w3.org/2000/svg';
+function el(tag,attrs,parent){const e=document.createElementNS(SVGNS,tag);for(const k in attrs)e.setAttribute(k,attrs[k]);if(parent)parent.appendChild(e);return e;}
+function shade(v){ // 0..9 -> dark for high
+  const t=v/9; const c=Math.round(232-(232-27)*t); return `rgb(${c},${c+ (c<120?5:0)},${c})`;
+}
+
+/* ---------- PART 0 : PIPELINE ---------- */
+function playPipe(){
+  const nodes=[...document.querySelectorAll('#pipeSvg .pipe-node')];
+  nodes.forEach(n=>n.querySelector('rect').setAttribute('fill','#fff'));
+  nodes.forEach((n,i)=>setTimeout(()=>{
+    const r=n.querySelector('rect');
+    r.setAttribute('fill', i===nodes.length-1?'#FCE7EB':'#EAF0F9');
+    setTimeout(()=>{if(i!==nodes.length-1)r.setAttribute('fill','#fff');},700);
+  },i*450));
+}
+
+/* ---------- PART 1 : IMAGE GRID (the letter X, 5x5) ---------- */
+const Ximg=[
+ [9,1,0,1,9],
+ [1,9,1,9,1],
+ [0,1,9,1,0],
+ [1,9,1,9,1],
+ [9,1,0,1,9]];
+let imgShowNum=false;
+function drawImg(){
+  const svg=document.getElementById('imgSvg');svg.innerHTML='';
+  const s=46,ox=95,oy=15;
+  for(let r=0;r<5;r++)for(let c=0;c<5;c++){
+    const v=Ximg[r][c];
+    el('rect',{x:ox+c*s,y:oy+r*s,width:s-3,height:s-3,rx:5,fill:shade(v),stroke:'#DDE1E6'},svg);
+    if(imgShowNum){
+      el('text',{x:ox+c*s+(s-3)/2,y:oy+r*s+(s-3)/2+5,'text-anchor':'middle','font-size':'15','font-weight':'700',
+        fill:v>5?'#fff':'#5F6B7A','font-family':'Open Sans'},svg).textContent=v;
+    }
+  }
+  el('text',{x:210,y:255,'text-anchor':'middle','font-size':'13',fill:'#5F6B7A','font-family':'Open Sans'},svg)
+    .textContent=imgShowNum?'Same picture — now you see the numbers':'A simple image of the letter "X"';
+}
+function toggleNumbers(){imgShowNum=true;drawImg();}
+function resetImg(){imgShowNum=false;drawImg();}
+
+/* ---------- PART 2 : CONVOLUTION ---------- */
+// feature map = high where filter (diagonal) matches; precomputed 3x3 for a 5x5 with 3x3 filter
+const featMap=[
+ [9,2,9],
+ [2,9,2],
+ [9,2,9]];
+let convTimer=null;
+function drawConv(step){
+  const svg=document.getElementById('convSvg');svg.innerHTML='';
+  const s=40,ox=20,oy=40;
+  // input grid
+  el('text',{x:20+ (5*s)/2,y:25,'text-anchor':'middle','font-size':'12','font-weight':'700',fill:'#1B2A4A','font-family':'Open Sans'},svg).textContent='INPUT IMAGE';
+  for(let r=0;r<5;r++)for(let c=0;c<5;c++){
+    el('rect',{x:ox+c*s,y:oy+r*s,width:s-3,height:s-3,rx:4,fill:shade(Ximg[r][c]),stroke:'#DDE1E6'},svg);
+  }
+  // feature map (right)
+  const fx=380,fs=46;
+  el('text',{x:fx+(3*fs)/2,y:25,'text-anchor':'middle','font-size':'12','font-weight':'700',fill:'#B45309','font-family':'Open Sans'},svg).textContent='FEATURE MAP';
+  for(let r=0;r<3;r++)for(let c=0;c<3;c++){
+    const idx=r*3+c;
+    const filled= step>idx;
+    const v=featMap[r][c];
+    el('rect',{x:fx+c*fs,y:oy+r*fs,width:fs-4,height:fs-4,rx:5,
+      fill:filled?`rgba(180,83,9,${0.25+0.75*v/9})`:'#fff',stroke:'#DDE1E6'},svg);
+    if(filled) el('text',{x:fx+c*fs+(fs-4)/2,y:oy+r*fs+(fs-4)/2+5,'text-anchor':'middle','font-size':'14','font-weight':'700',
+      fill:v>5?'#fff':'#B45309','font-family':'Open Sans'},svg).textContent=v;
+  }
+  // sliding window
+  if(step>=0&&step<9){
+    const wr=Math.floor(step/3),wc=step%3;
+    el('rect',{x:ox+wc*s-2,y:oy+wr*s-2,width:s*3,height:s*3,rx:6,fill:'rgba(200,16,46,0.12)',
+      stroke:'#C8102E','stroke-width':'3'},svg);
+    // connector arrow to current feature cell
+    const tr=Math.floor(step/3),tc=step%3;
+    el('line',{x1:ox+wc*s+s*1.5,y1:oy+wr*s+s*1.5,x2:fx+tc*fs+(fs-4)/2,y2:oy+tr*fs+(fs-4)/2,
+      stroke:'#C8102E','stroke-width':'1.5','stroke-dasharray':'4 3',opacity:'0.6'},svg);
+  }
+  el('text',{x:280,y:300,'text-anchor':'middle','font-size':'12',fill:'#5F6B7A','font-family':'Open Sans'},svg)
+    .textContent=step>=9?'Done — the X-shape lit up along the diagonals':'The filter checks one patch, scores it, moves on';
+}
+function playConv(){
+  resetConv();const btn=document.getElementById('convBtn');btn.disabled=true;
+  let step=0;drawConv(step);
+  convTimer=setInterval(()=>{step++;drawConv(step);if(step>=9){clearInterval(convTimer);btn.disabled=false;}},650);
+}
+function resetConv(){if(convTimer)clearInterval(convTimer);drawConv(-1);}
+
+/* ---------- PART 3 : POOLING ---------- */
+// 4x4 feature map -> 2x2 via max pooling
+const poolIn=[
+ [1,6,3,2],
+ [4,9,1,0],
+ [7,2,8,3],
+ [1,5,4,9]];
+const poolOut=[[9,3],[7,9]];
+let poolTimer=null;
+function drawPool(step){
+  const svg=document.getElementById('poolSvg');svg.innerHTML='';
+  const s=44,ox=20,oy=50;
+  el('text',{x:ox+2*s,y:35,'text-anchor':'middle','font-size':'12','font-weight':'700',fill:'#1B2A4A','font-family':'Open Sans'},svg).textContent='FEATURE MAP (4×4)';
+  for(let r=0;r<4;r++)for(let c=0;c<4;c++){
+    const v=poolIn[r][c];
+    el('rect',{x:ox+c*s,y:oy+r*s,width:s-3,height:s-3,rx:4,fill:`rgba(180,83,9,${0.12+0.6*v/9})`,stroke:'#DDE1E6'},svg);
+    el('text',{x:ox+c*s+(s-3)/2,y:oy+r*s+(s-3)/2+5,'text-anchor':'middle','font-size':'13','font-weight':'600',fill:'#1B2A4A','font-family':'Open Sans'},svg).textContent=v;
+  }
+  // output
+  const os=52,fx=400,fy=70;
+  el('text',{x:fx+os,y:35,'text-anchor':'middle','font-size':'12','font-weight':'700',fill:'#B45309','font-family':'Open Sans'},svg).textContent='POOLED (2×2)';
+  for(let r=0;r<2;r++)for(let c=0;c<2;c++){
+    const idx=r*2+c, filled=step>idx, v=poolOut[r][c];
+    el('rect',{x:fx+c*os,y:fy+r*os,width:os-4,height:os-4,rx:6,fill:filled?'#B45309':'#fff',stroke:'#DDE1E6'},svg);
+    if(filled)el('text',{x:fx+c*os+(os-4)/2,y:fy+r*os+(os-4)/2+6,'text-anchor':'middle','font-size':'18','font-weight':'700',fill:'#fff','font-family':'Open Sans'},svg).textContent=v;
+  }
+  // current block highlight
+  if(step>=0&&step<4){
+    const br=Math.floor(step/2),bc=step%2;
+    el('rect',{x:ox+bc*2*s-2,y:oy+br*2*s-2,width:s*2,height:s*2,rx:6,fill:'rgba(200,16,46,0.10)',stroke:'#C8102E','stroke-width':'3'},svg);
+  }
+  el('text',{x:280,y:265,'text-anchor':'middle','font-size':'12',fill:'#5F6B7A','font-family':'Open Sans'},svg)
+    .textContent=step>=4?'16 numbers became 4 — only the strongest survived':'Each 2×2 block keeps just its biggest value';
+}
+function playPool(){
+  resetPool();const btn=document.getElementById('poolBtn');btn.disabled=true;
+  let step=0;drawPool(step);
+  poolTimer=setInterval(()=>{step++;drawPool(step);if(step>=4){clearInterval(poolTimer);btn.disabled=false;}},700);
+}
+function resetPool(){if(poolTimer)clearInterval(poolTimer);drawPool(-1);}
+
+/* ---------- PART 4 : FLATTEN ---------- */
+const flatVals=[9,3,7,9];
+let flatTimer=null;
+function drawFlat(step){
+  const svg=document.getElementById('flatSvg');svg.innerHTML='';
+  const s=54,ox=40,oy=30;
+  el('text',{x:ox+s,y:18,'text-anchor':'middle','font-size':'12','font-weight':'700',fill:'#1B2A4A','font-family':'Open Sans'},svg).textContent='2×2 GRID';
+  const pos=[[0,0],[0,1],[1,0],[1,1]];
+  // line targets
+  const lx=170,ly=170,gap=66;
+  el('text',{x:lx+1.5*gap,y:150,'text-anchor':'middle','font-size':'12','font-weight':'700',fill:'#B45309','font-family':'Open Sans'},svg).textContent='ONE LONG LINE OF INPUTS';
+  for(let i=0;i<4;i++){
+    const [r,c]=pos[i];
+    const moved=step>i;
+    // grid cell (stays, dims when moved)
+    el('rect',{x:ox+c*s,y:oy+r*s,width:s-5,height:s-5,rx:6,fill:moved?'#EEE':'#B45309',stroke:'#DDE1E6'},svg);
+    el('text',{x:ox+c*s+(s-5)/2,y:oy+r*s+(s-5)/2+6,'text-anchor':'middle','font-size':'17','font-weight':'700',fill:moved?'#bbb':'#fff','font-family':'Open Sans'},svg).textContent=flatVals[i];
+    // landed cell in the line
+    if(moved){
+      el('rect',{x:lx+i*gap,y:ly,width:50,height:50,rx:6,fill:'#B45309',stroke:'#DDE1E6'},svg);
+      el('text',{x:lx+i*gap+25,y:ly+31,'text-anchor':'middle','font-size':'17','font-weight':'700',fill:'#fff','font-family':'Open Sans'},svg).textContent=flatVals[i];
+    } else {
+      el('rect',{x:lx+i*gap,y:ly,width:50,height:50,rx:6,fill:'#fff',stroke:'#DDE1E6','stroke-dasharray':'4 3'},svg);
+    }
+  }
+  el('text',{x:280,y:225,'text-anchor':'middle','font-size':'12',fill:'#5F6B7A','font-family':'Open Sans'},svg)
+    .textContent=step>=4?'Same four numbers — just a single row now':'Reading the grid out, cell by cell';
+}
+function playFlat(){
+  resetFlat();const btn=document.getElementById('flatBtn');btn.disabled=true;
+  let step=0;drawFlat(step);
+  flatTimer=setInterval(()=>{step++;drawFlat(step);if(step>=4){clearInterval(flatTimer);btn.disabled=false;}},650);
+}
+function resetFlat(){if(flatTimer)clearInterval(flatTimer);drawFlat(0);}
+
+/* ---------- PART 5 : DENSE / DECIDE ---------- */
+const classes=[{n:'Cat',p:0.82},{n:'Dog',p:0.13},{n:'Bird',p:0.05}];
+let denseTimer=null;
+function drawDense(stage){ // stage: 0 inputs,1 connections,2 bars
+  const svg=document.getElementById('denseSvg');svg.innerHTML='';
+  const inX=70,inY=[60,130,200];const vals=[9,3,7,9];
+  // input nodes (4)
+  const iy=[45,105,165,225];
+  el('text',{x:inX,y:25,'text-anchor':'middle','font-size':'11','font-weight':'700',fill:'#B45309','font-family':'Open Sans'},svg).textContent='FEATURES';
+  // output nodes
+  const outX=300,outY=[80,150,220];
+  el('text',{x:outX,y:25,'text-anchor':'middle','font-size':'11','font-weight':'700',fill:'#1B2A4A','font-family':'Open Sans'},svg).textContent='OPTIONS';
+  // connections
+  if(stage>=1){
+    iy.forEach(y1=>outY.forEach((y2,j)=>{
+      el('line',{x1:inX+18,y1:y1,x2:outX-22,y2:y2,stroke:'#C8102E',
+        'stroke-width': j===0?'2':'1','opacity': j===0?'0.55':'0.18'},svg);
+    }));
+  }
+  iy.forEach((y,i)=>{
+    el('circle',{cx:inX,cy:y,r:16,fill:'#B45309'},svg);
+    el('text',{x:inX,y:y+5,'text-anchor':'middle','font-size':'13','font-weight':'700',fill:'#fff','font-family':'Open Sans'},svg).textContent=vals[i];
+  });
+  outY.forEach((y,j)=>{
+    el('circle',{cx:outX,cy:y,r:18,fill:'#fff',stroke:'#1B2A4A','stroke-width':'2'},svg);
+    el('text',{x:outX,y:y+5,'text-anchor':'middle','font-size':'11','font-weight':'700',fill:'#1B2A4A','font-family':'Open Sans'},svg).textContent=classes[j].n;
+  });
+  // probability bars
+  if(stage>=2){
+    const bx=360,bw=150;
+    classes.forEach((cl,j)=>{
+      const y=outY[j]-14;
+      el('rect',{x:bx,y:y,width:bw,height:26,rx:5,fill:'#EFEFEF'},svg);
+      el('rect',{x:bx,y:y,width:bw*cl.p,height:26,rx:5,fill:j===0?'#C8102E':'#AAB2BD'},svg);
+      el('text',{x:bx+bw+8,y:y+18,'font-size':'13','font-weight':'700',fill:j===0?'#C8102E':'#5F6B7A','font-family':'Open Sans'},svg).textContent=Math.round(cl.p*100)+'%';
+    });
+    el('text',{x:280,y:285,'text-anchor':'middle','font-size':'13','font-weight':'700',fill:'#C8102E','font-family':'Open Sans'},svg).textContent='Prediction: it’s a Cat (82% sure)';
+  } else {
+    el('text',{x:280,y:285,'text-anchor':'middle','font-size':'12',fill:'#5F6B7A','font-family':'Open Sans'},svg)
+      .textContent=stage>=1?'Every feature votes toward every option…':'Press play to connect the features to the options';
+  }
+}
+function playDense(){
+  resetDense();const btn=document.getElementById('denseBtn');btn.disabled=true;
+  drawDense(0);
+  setTimeout(()=>drawDense(1),600);
+  setTimeout(()=>{drawDense(2);btn.disabled=false;},1500);
+}
+function resetDense(){if(denseTimer)clearTimeout(denseTimer);drawDense(0);}
+
+/* ---------- PART 6 : RECAP ---------- */
+function buildRecap(){
+  const svg=document.getElementById('recapSvg');svg.innerHTML='';
+  const labels=['Image','Convolution','Pooling','Flatten','Dense','Cat'];
+  const sub=['pixels','find features','shrink','line up','weigh up','answer'];
+  const xs=[10,150,290,430,570,710];const w=[110,110,110,110,110,100];
+  labels.forEach((lb,i)=>{
+    const g=el('g',{class:'recap-node','data-i':i},svg);
+    el('rect',{x:xs[i],y:55,width:w[i],height:60,rx:8,fill:'#fff',stroke:i===5?'#C8102E':'#DDE1E6'},g);
+    el('text',{x:xs[i]+w[i]/2,y:80,'text-anchor':'middle','font-size':'13','font-weight':'700',fill:i===5?'#C8102E':'#1B2A4A','font-family':'Open Sans'},g).textContent=lb;
+    el('text',{x:xs[i]+w[i]/2,y:98,'text-anchor':'middle','font-size':'10',fill:'#5F6B7A','font-family':'Open Sans'},g).textContent=sub[i];
+    if(i<5){const ax=xs[i]+w[i];
+      el('line',{x1:ax,y1:85,x2:ax+24,y2:85,stroke:'#8C95A1','stroke-width':'2'},svg);
+      el('polygon',{points:`${ax+24},80 ${ax+34},85 ${ax+24},90`,fill:'#8C95A1'},svg);}
+  });
+}
+function playRecap(){
+  buildRecap();
+  const nodes=[...document.querySelectorAll('#recapSvg .recap-node')];
+  nodes.forEach((n,i)=>setTimeout(()=>{
+    const r=n.querySelector('rect');
+    r.setAttribute('fill',i===5?'#FCE7EB':'#EAF0F9');
+    setTimeout(()=>{if(i!==5)r.setAttribute('fill','#fff');},800);
+  },i*500));
+}
+
+/* ---------- INIT ---------- */
+drawImg();drawConv(-1);drawPool(-1);drawFlat(0);drawDense(0);buildRecap();
+document.getElementById('progress').style.width='0%';
+</script>
+</body>
+</html>
